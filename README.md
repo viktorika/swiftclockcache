@@ -8,6 +8,7 @@ A general-purpose high-performance concurrent clock cache inspired by the HyperC
 - **Clock eviction** — Uses a clock (second-chance) algorithm for cache eviction, balancing hit rate and performance.
 - **Sharded architecture** — Distributes data across multiple shards to reduce contention.
 - **TTL support** — Optional per-entry time-to-live (TTL); expired entries are automatically evicted.
+- **Batch operations** — Provides `BatchInsert`, `BatchLookup`, and `BatchErase` with shard-grouped execution for better cache locality.
 - **Header-only** — Only depends on the C++ standard library and the bundled xxHash; simply include the header to use.
 
 ## Quick Start
@@ -102,6 +103,42 @@ Removes all entries that are not currently referenced.
 cache.Clear();
 ```
 
+#### `BatchInsert(keys, values)` → `std::vector<ErrorCode>`
+
+Inserts multiple key-value pairs in a single call. Keys and values are provided as two separate vectors of equal length. Keys are grouped by shard internally for better CPU cache locality.
+
+```cpp
+std::vector<Key> keys = {"a", "b", "c"};
+std::vector<Value> values = {1, 2, 3};
+auto results = cache.BatchInsert(keys, values);
+for (size_t i = 0; i < results.size(); i++) {
+    if (results[i] == ErrorCode::kOk) { /* success */ }
+}
+```
+
+#### `BatchLookup(keys)` → `std::vector<Handle<Key, Value>>`
+
+Looks up multiple keys in a single call. Returns a vector of handles in the same order as the input keys. Each handle is independent and follows the same RAII semantics.
+
+```cpp
+std::vector<Key> keys = {"a", "b", "c", "nonexistent"};
+auto handles = cache.BatchLookup(keys);
+for (size_t i = 0; i < handles.size(); i++) {
+    if (handles[i]) {
+        Value& v = *handles[i];
+    }
+}
+```
+
+#### `BatchErase(keys)`
+
+Removes multiple entries in a single call, grouped by shard for efficiency.
+
+```cpp
+std::vector<Key> keys = {"a", "b", "c"};
+cache.BatchErase(keys);
+```
+
 #### `GetSize()` / `GetCapacity()` / `Empty()`
 
 ```cpp
@@ -151,7 +188,7 @@ The key type must also support `operator==` for equality comparison.
 
 ## Thread Safety
 
-- `Insert`, `Lookup`, `Erase`, and `Clear` are all **thread-safe** and can be called concurrently.
+- `Insert`, `Lookup`, `Erase`, `Clear`, `BatchInsert`, `BatchLookup`, and `BatchErase` are all **thread-safe** and can be called concurrently.
 - `Handle` objects are **not thread-safe** — do not share a single `Handle` instance across threads. Each thread should hold its own handle from `Lookup`.
 - The value pointed to by a `Handle` can be safely read concurrently, but concurrent mutation of the value itself requires external synchronization.
 

@@ -146,6 +146,79 @@ class SwiftClockCache {
     shard.Erase(key, hk);
   }
 
+  // ========================================================================
+  // Batch Insert — group by shard for better cache locality
+  // ========================================================================
+  template <typename V>
+  std::vector<ErrorCode> BatchInsert(const std::vector<Key>& keys, const std::vector<V>& values,
+                                     uint32_t ttl_seconds = 0) {
+    assert(keys.size() == values.size());
+    std::vector<ErrorCode> results(keys.size(), ErrorCode::kOk);
+    if (keys.empty()) {
+      return results;
+    }
+
+    auto per_shard = GroupByShard(keys);
+
+    for (size_t s = 0; s < num_shards_; s++) {
+      if (per_shard[s].empty()) {
+        continue;
+      }
+      auto& shard = *shards_[s];
+      for (auto& item : per_shard[s]) {
+        results[item.orig_index] = shard.Insert(keys[item.orig_index], values[item.orig_index], item.hk, ttl_seconds);
+      }
+    }
+    return results;
+  }
+
+  // ========================================================================
+  // Batch Lookup — group by shard for better cache locality
+  // ========================================================================
+  std::vector<HandleType> BatchLookup(const std::vector<Key>& keys) {
+    std::vector<HandleType> results(keys.size());
+    if (keys.empty()) {
+      return results;
+    }
+
+    auto per_shard = GroupByShard(keys);
+
+    for (size_t s = 0; s < num_shards_; s++) {
+      if (per_shard[s].empty()) {
+        continue;
+      }
+      auto& shard = *shards_[s];
+      for (auto& item : per_shard[s]) {
+        auto* slot = shard.Lookup(keys[item.orig_index], item.hk);
+        if (slot) {
+          results[item.orig_index] = HandleType(&shard, slot);
+        }
+      }
+    }
+    return results;
+  }
+
+  // ========================================================================
+  // Batch Erase — group by shard for better cache locality
+  // ========================================================================
+  void BatchErase(const std::vector<Key>& keys) {
+    if (keys.empty()) {
+      return;
+    }
+
+    auto per_shard = GroupByShard(keys);
+
+    for (size_t s = 0; s < num_shards_; s++) {
+      if (per_shard[s].empty()) {
+        continue;
+      }
+      auto& shard = *shards_[s];
+      for (auto& item : per_shard[s]) {
+        shard.Erase(keys[item.orig_index], item.hk);
+      }
+    }
+  }
+
   void Clear() {
     for (auto& shard : shards_) {
       shard->EraseUnRefEntries();
@@ -173,6 +246,25 @@ class SwiftClockCache {
  private:
   using Shard = ClockCacheShard<Key, Value>;
 
+  // Helper: index + pre-computed hash, grouped by shard
+  struct ShardItem {
+    ShardItem(size_t origin_index, HashedKey hashkey) : orig_index(origin_index), hk(hashkey) {}
+    size_t orig_index;
+    HashedKey hk;
+  };
+
+  // Group items by shard index for cache-friendly batch processing.
+  // Returns a vector indexed by shard index; callers should skip empty entries.
+  std::vector<std::vector<ShardItem>> GroupByShard(const std::vector<Key>& keys) {
+    std::vector<std::vector<ShardItem>> per_shard(num_shards_);
+    for (size_t i = 0; i < keys.size(); i++) {
+      HashedKey hk = MakeHashed(keys[i]);
+      size_t shard_idx = GetShardIndex(hk);
+      per_shard[shard_idx].emplace_back(i, hk);
+    }
+    return per_shard;
+  }
+
   void Init(const Options& opts) {
     assert(opts.max_size > 0);
 
@@ -192,12 +284,14 @@ class SwiftClockCache {
 
   HashedKey MakeHashed(const Key& key) const { return MakeHashedKey(key, seed_); }
 
-  Shard& GetShard(HashedKey hk) {
+  Shard& GetShard(HashedKey hk) { return *shards_[GetShardIndex(hk)]; }
+
+  [[nodiscard]] size_t GetShardIndex(HashedKey hk) const {
     if (shard_bits_ == 0) {
-      return *shards_[0];
+      return 0;
     }
     uint32_t shard_idx = Upper32of64(hk.h0);
-    return *shards_[shard_idx >> (32 - shard_bits_)];
+    return shard_idx >> (32 - shard_bits_);
   }
 
   size_t num_shards_;
