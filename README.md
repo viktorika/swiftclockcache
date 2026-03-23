@@ -157,9 +157,9 @@ The key type must also support `operator==` for equality comparison.
 
 ## Build
 
-SwiftClockCache is header-only. Simply add the header files to your project's include path and compile `xxhash.cc`:
+SwiftClockCache is truly header-only. Simply add the header files to your project's include path:
 
 ```bash
 # Example with g++
-g++ -std=c++17 -O2 -o my_app my_app.cc xxhash.cc -lpthread
+g++ -std=c++17 -O2 -o my_app my_app.cc -lpthread
 ```

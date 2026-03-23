@@ -11,6 +11,7 @@
 #include "clock_cache_shard.h"
 
 namespace swiftclockcache {
+#define XXH_INLINE_ALL
 #include "xxhash.h"
 
 struct BytesView {
