@@ -20,13 +20,14 @@ struct BytesView {
 
 template <typename Key, typename Enable = void>
 struct KeyBytes {
-  static_assert(std::is_trivially_copyable_v<Key>, "Non-trivially-copyable Key requires a specialization of swiftclockcache::KeyBytes");
+  static_assert(std::is_trivially_copyable_v<Key>,
+                "Non-trivially-copyable Key requires a specialization of swiftclockcache::KeyBytes");
   static BytesView GetBytes(const Key& key) { return {&key, sizeof(Key)}; }
 };
 
 template <>
 struct KeyBytes<std::string> {
-  static BytesView GetBytes(const std::string& key) { return {key.data(), key.size()}; }
+  static BytesView GetBytes(const std::string& key) { return {key.c_str(), key.size()}; }
 };
 
 template <>
@@ -122,10 +123,10 @@ class SwiftClockCache {
   SwiftClockCache& operator=(const SwiftClockCache&) = delete;
 
   template <typename V>
-  ErrorCode Insert(const Key& key, V&& value) {
+  ErrorCode Insert(const Key& key, V&& value, uint32_t ttl_seconds = 0) {
     auto hk = MakeHashed(key);
     auto& shard = GetShard(hk);
-    return shard.Insert(key, std::forward<V>(value), hk);
+    return shard.Insert(key, std::forward<V>(value), hk, ttl_seconds);
   }
 
   HandleType Lookup(const Key& key) {
