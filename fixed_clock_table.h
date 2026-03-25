@@ -554,7 +554,9 @@ class FixedClockTable {
   static int CalcHashBits(size_t capacity) {
     double target_slots = static_cast<double>(capacity) / kLoadFactor;
     int hash_bits = 0;
-    while ((size_t{1} << hash_bits) < target_slots && hash_bits < 32) ++hash_bits;
+    while ((size_t{1} << hash_bits) < target_slots && hash_bits < 32) {
+      ++hash_bits;
+    }
     return std::max(hash_bits, 4);
   }
 
