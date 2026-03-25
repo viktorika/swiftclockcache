@@ -198,5 +198,5 @@ SwiftClockCache is truly header-only. Simply add the header files to your projec
 
 ```bash
 # Example with g++
-g++ -std=c++17 -O2 -o my_app my_app.cc -lpthread
+g++ -std=c++17 -O2 -o my_app my_app.cc -lpthread -DNDEBUG
 ```
