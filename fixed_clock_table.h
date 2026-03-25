@@ -141,8 +141,8 @@ class FixedClockTable {
   struct Slot {
     mutable AtomicSlotMeta meta;
     std::atomic<uint32_t> displacements{0};
+    std::atomic<uint32_t> expire_at{0};
     HashedKey hashed_key = {};  // 128-bit hash value
-    uint32_t expire_at = 0;     // 过期时间戳（秒），0 表示永不过期。由 meta 的 release/acquire 保护可见性
 
     // Key
     alignas(alignof(Key)) unsigned char key_storage[sizeof(Key)];
@@ -173,10 +173,9 @@ class FixedClockTable {
     void SubDisplacement() { displacements.fetch_sub(1, std::memory_order_relaxed); }
 
     // ---- TTL operations ----
-    void SetExpireAt(uint32_t t) { expire_at = t; }
-    uint32_t GetExpireAt() const { return expire_at; }
-    bool CheckExpired() const { return IsExpired(expire_at); }
-    bool CheckExpiredAt(uint32_t now) const { return IsExpiredAt(expire_at, now); }
+    void SetExpireAt(uint32_t t) { expire_at.store(t, std::memory_order_relaxed); }
+    uint32_t GetExpireAt() const { return expire_at.load(std::memory_order_relaxed); }
+    bool CheckExpiredAt(uint32_t now) const { return IsExpiredAt(expire_at.load(std::memory_order_relaxed), now); }
   };
 
   static constexpr double kLoadFactor = 0.7;
@@ -280,7 +279,7 @@ class FixedClockTable {
     }
   }
 
-  Slot* Lookup(const Key& key, HashedKey hk) {
+  Slot* Lookup(const Key& key, HashedKey hk, uint32_t now) {
     bool expired = false;
     return FindSlot(
         hk,
@@ -289,7 +288,7 @@ class FixedClockTable {
 
           if (old_meta.IsVisible()) {
             if (s->hashed_key.h0 == hk.h0 && s->hashed_key.h1 == hk.h1 && s->GetKey() == key) {
-              if (s->CheckExpired()) {
+              if (s->CheckExpiredAt(now)) {
                 s->meta.FetchClearVisible();
                 Unref(s->meta);
                 expired = true;
@@ -419,7 +418,7 @@ class FixedClockTable {
   // ClockUpdate
   // ========================================================================
   static bool ClockUpdate(Slot& s, EvictionData* data, uint32_t now) {
-    SlotMeta m = s.meta.Load();
+    SlotMeta m = s.meta.LoadRelaxed();
 
     if (!m.IsShareable()) {
       return false;

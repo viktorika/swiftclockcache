@@ -127,13 +127,15 @@ class SwiftClockCache {
   ErrorCode Insert(const Key& key, V&& value, uint32_t ttl_seconds = 0) {
     auto hk = MakeHashed(key);
     auto& shard = GetShard(hk);
-    return shard.Insert(key, std::forward<V>(value), hk, ttl_seconds);
+    uint32_t now = NowSeconds();
+    return shard.Insert(key, std::forward<V>(value), hk, now, ttl_seconds);
   }
 
   HandleType Lookup(const Key& key) {
     auto hk = MakeHashed(key);
     auto& shard = GetShard(hk);
-    auto* slot = shard.Lookup(key, hk);
+    uint32_t now = NowSeconds();
+    auto* slot = shard.Lookup(key, hk, now);
     if (slot == nullptr) {
       return {};
     }
@@ -159,6 +161,7 @@ class SwiftClockCache {
     }
 
     auto per_shard = GroupByShard(keys);
+    uint32_t now = NowSeconds();
 
     for (size_t s = 0; s < num_shards_; s++) {
       if (per_shard[s].empty()) {
@@ -166,7 +169,8 @@ class SwiftClockCache {
       }
       auto& shard = *shards_[s];
       for (auto& item : per_shard[s]) {
-        results[item.orig_index] = shard.Insert(keys[item.orig_index], values[item.orig_index], item.hk, ttl_seconds);
+        results[item.orig_index] =
+            shard.Insert(keys[item.orig_index], values[item.orig_index], item.hk, now, ttl_seconds);
       }
     }
     return results;
@@ -182,6 +186,7 @@ class SwiftClockCache {
     }
 
     auto per_shard = GroupByShard(keys);
+    uint32_t now = NowSeconds();
 
     for (size_t s = 0; s < num_shards_; s++) {
       if (per_shard[s].empty()) {
@@ -189,7 +194,7 @@ class SwiftClockCache {
       }
       auto& shard = *shards_[s];
       for (auto& item : per_shard[s]) {
-        auto* slot = shard.Lookup(keys[item.orig_index], item.hk);
+        auto* slot = shard.Lookup(keys[item.orig_index], item.hk, now);
         if (slot) {
           results[item.orig_index] = HandleType(&shard, slot);
         }

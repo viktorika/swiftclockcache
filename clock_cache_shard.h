@@ -21,10 +21,9 @@ class ClockCacheShard {
   ClockCacheShard(size_t capacity, int eviction_effort_cap) : table_(capacity, eviction_effort_cap) {}
 
   template <typename V>
-  ErrorCode Insert(const Key& key, V&& value, HashedKey hk, uint32_t ttl_seconds = 0) {
+  ErrorCode Insert(const Key& key, V&& value, HashedKey hk, uint32_t now, uint32_t ttl_seconds = 0) {
     size_t current_size = table_.GetSize();
     size_t capacity = table_.GetCapacity();
-    uint32_t now = NowSeconds();
     if (current_size >= capacity) {
       EvictionData ed{};
       table_.Evict(now, current_size - capacity + 1, &ed);
@@ -43,7 +42,7 @@ class ClockCacheShard {
     return ErrorCode::kOk;
   }
 
-  Slot* Lookup(const Key& key, HashedKey hk) { return table_.Lookup(key, hk); }
+  Slot* Lookup(const Key& key, HashedKey hk, uint32_t now) { return table_.Lookup(key, hk, now); }
 
   bool Release(Slot* s) { return table_.Release(s); }
 

@@ -524,7 +524,7 @@ void BenchConcurrent() {
   const size_t kCacheSize = 50000;
   const size_t kKeyRange = 100000;
 
-  for (int num_threads : {1, 2, 4, 8}) {
+  for (int num_threads : {1, 2, 4, 8, 16, 32}) {
     const size_t kOpsPerThread = 200000;
 
     std::cout << std::endl;

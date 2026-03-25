@@ -54,8 +54,6 @@ inline uint32_t CalcExpireTime(uint32_t now, uint32_t ttl_seconds) {
   return now + ttl_seconds;
 }
 
-inline bool IsExpired(uint32_t expire_at) { return expire_at != 0 && NowSeconds() >= expire_at; }
-
 inline bool IsExpiredAt(uint32_t expire_at, uint32_t now) { return expire_at != 0 && now >= expire_at; }
 
 inline int FloorLog2(size_t v) {
