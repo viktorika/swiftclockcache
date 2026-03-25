@@ -24,8 +24,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "swift_clock_cache.h"
-#include "xxhash.h"
+#include "include/swift_clock_cache.h"
 
 using namespace swiftclockcache;
 
