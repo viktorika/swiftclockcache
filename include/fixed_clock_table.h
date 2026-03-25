@@ -9,6 +9,7 @@
 #include <atomic>
 #include <cassert>
 #include <functional>
+#include <memory>
 #include "base.h"
 
 namespace swiftclockcache {
